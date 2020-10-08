@@ -8,6 +8,7 @@
 #define QUOTA 50000       // microseconds
 #define STACK_SIZE 32767  // bytes
 #define MAX_THREADS 128
+
 /* Register name definitions from libc
 JB_RBX 0
 JB_RBP 1
@@ -19,18 +20,20 @@ JB_RSP 6
 JB_PC 7
 */
 
-typedef enum state {
+typedef enum State {
     RUNNING,
     READY,
     EXITED,
-} state_t;
+} State;
 
 typedef struct TCB {
-    pthread_t tid;
-    jmp_buf buf;  // 64b[8]
+    pthread_t id;
+    jmp_buf buf;
     void *stack;
-    state_t state;
-} TCB_t;
+    State state;
+    struct TCB *next;
+    struct TCB *last;
+} TCB;
 
 int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_routine)(void *), void *arg);
 void pthread_exit(void *value_ptr);
