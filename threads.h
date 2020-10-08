@@ -8,16 +8,16 @@
 #define STACK_SIZE 32767  // bytes
 #define MAX_THREADS 128
 
-/* Register name definitions from libc
-JB_RBX 0
-JB_RBP 1
-JB_R12 2
-JB_R13 3
-JB_R14 4
-JB_R15 5
-JB_RSP 6
-JB_PC 7
-*/
+
+// DEFINED IN EC440...
+// #define JB_RBX 0
+// #define JB_RBP 1
+// #define JB_R12 2
+// #define JB_R13 3
+// #define JB_R14 4
+// #define JB_R15 5
+// #define JB_RSP 6  // stack pointer
+// #define JB_PC 7   // program counter
 
 typedef enum State {
     RUNNING,
