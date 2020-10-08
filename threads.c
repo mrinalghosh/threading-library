@@ -1,8 +1,12 @@
 #include "threads.h"
 
+// #include <pthread.h>
+// #include <setjmp.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <unistd.h>  // for ualarm
 
 #include "ec440threads.h"
 
@@ -13,9 +17,13 @@
 
 int thread_count = 0;
 
-static void init(void) {
-    // helper function called with first thread creation
-    // initialize main thread first
+void signal_handler(int signum) {
+    // schedule should be the signal handler
+    printf("inside signal handler function");
+}
+
+static void thread_init(void) {
+    // helper function called with first thread creation - initializes main thread
     TCB *m_thread = (TCB *)calloc(1, sizeof(TCB));
 
     // create circular list with just single element
@@ -32,6 +40,14 @@ static void init(void) {
 
     // increment thread count
     ++thread_count;
+
+    // signal handling
+    struct sigaction act;
+    act.sa_handler = signal_handler;
+    sigaction(SIGALRM, &act, 0);
+
+    // set repeating alarm for 50ms
+    ualarm(QUOTA, QUOTA);
 }
 
 int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_routine)(void *), void *arg) {
@@ -40,9 +56,12 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
     execute start_routine with arg as sole argument
     if start routine returns, implicitly call pthread_exit
     deal with main thread exiting
+    NOTES:
+    attr always NULL
     */
+
     if (!thread_count) {
-        init();
+        thread_init();
     }
 }
 

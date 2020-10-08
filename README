@@ -5,3 +5,9 @@ https://accu.org/journals/overload/23/130/schmidt_2185/ - unix sleep functions
 
 calloc vs malloc:
 https://www.tutorialspoint.com/c_standard_library/c_function_calloc.htm
+
+SIGALRM + signals:
+https://linuxhint.com/sigalarm_alarm_c_language/
+https://nxmnpg.lemoda.net/3/ualarm
+https://stackoverflow.com/questions/231912/what-is-the-difference-between-sigaction-and-signal
+https://pubs.opengroup.org/onlinepubs/7908799/xsh/unistd.h.html

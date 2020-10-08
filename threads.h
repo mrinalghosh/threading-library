@@ -3,7 +3,6 @@
 
 #include <pthread.h>
 #include <setjmp.h>
-#include <signal.h>
 
 #define QUOTA 50000       // microseconds
 #define STACK_SIZE 32767  // bytes
