@@ -6,7 +6,8 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>  // for ualarm
+#include <string.h>  // memset
+#include <unistd.h>  // ualarm
 
 #include "ec440threads.h"
 
@@ -21,21 +22,9 @@ int thread_c = 0;
 TCB *head = NULL;
 TCB *current = NULL;
 
-void scheduler(int signum) {
-    printf("inside scheduler - recieved SIGALRM\n");
-    if (!setjmp(current->buf)) {  // setjmp returns zero the first time it's called
-        current->state = READY;
-        current = current->next;  // set current to next thread
-        current->state = RUNNING;
-        longjmp(current->buf, 1);  // longjump to next thread
-    }
-}
-
-/*
-static void _inspect(jmp_buf buf) {
+static void inspect_jmpbuf(jmp_buf buf) {
     printf(
-        "RBX: 0x%08lx\nRBP: 0x%08lx\nR12: 0x%08lx\nR13: 0x%08lx\nR14: \
-        0x%08lx\nR15: 0x%08lx\nSP:  0x%08lx\nPC:  0x%08lx\n",
+        "RBX: 0x%08lx\nRBP: 0x%08lx\nR12: 0x%08lx\nR13: 0x%08lx\nR14: 0x%08lx\nR15: 0x%08lx\nSP:  0x%08lx\nPC:  0x%08lx\n",
         buf[0].__jmpbuf[JB_RBX], buf[0].__jmpbuf[JB_RBP],
         buf[0].__jmpbuf[JB_R12], buf[0].__jmpbuf[JB_R13],
         buf[0].__jmpbuf[JB_R14], buf[0].__jmpbuf[JB_R15],
@@ -45,7 +34,24 @@ static void _inspect(jmp_buf buf) {
            ptr_demangle(buf[0].__jmpbuf[JB_RSP]),
            ptr_demangle(buf[0].__jmpbuf[JB_PC]));
 }
-*/
+
+void inspect_thread(TCB *thread) {
+    printf("___________________________________\n");
+    // printf("Thread Control Block:\nid:%08x\n", thread->id);
+    inspect_jmpbuf(thread->buf);
+    printf("stack:%p\nstate:%d\n", thread->stack, thread->state);
+    printf("___________________________________\n");
+}
+
+void scheduler(int signum) {
+    printf("inside scheduler - recieved SIGALRM\n");
+    if (!setjmp(current->buf)) {  // setjmp returns zero the first time it's called
+        current->state = READY;
+        current = current->next;  // set current to next thread
+        current->state = RUNNING;
+        longjmp(current->buf, 1);  // longjump to next thread
+    }
+}
 
 static void threads_init(void) {
     printf("inside init - created first thread\n");
@@ -76,15 +82,26 @@ static void threads_init(void) {
 
     // signal handling
     struct sigaction act;
-    act.sa_handler = scheduler;
-    if (sigaction(SIGALRM, &act, NULL) < 0) {
-        printf("SIGALARM FAILED - BREAKING\n");
-        perror("sigaction");
-        exit(1);
-    }
 
-    // set repeating alarm for 50ms
+    // zero struct
+    memset(&act, '\0', sizeof(act));
+
+    act.sa_handler = scheduler;
+    act.sa_flags = SA_NODEFER;  // can even recieve alarm signal within handler
+
+    // if (sigaction(SIGALRM, &act, NULL) < 0) { // this hasn't failed
+    //     printf("SIGALARM FAILED - BREAKING\n");
+    //     perror("sigaction");
+    //     exit(1);
+    // }
+
+    // doesn't fail - only run once
+    sigaction(SIGALRM, &act, NULL);
+
+    // set repeating alarm for quota micro seconds
     ualarm(QUOTA, QUOTA);
+
+    inspect_thread(first);
 }
 
 int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_routine)(void *), void *arg) {
@@ -97,7 +114,7 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
 
     // TODO: case where 128 threads are created
 
-    if (!thread_c) { // initialize first thread
+    if (!thread_c) {  // initialize first thread
         threads_init();
     } else {
         // create thread and add to end of circular linked list

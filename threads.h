@@ -5,7 +5,7 @@
 #include <setjmp.h>
 
 // #define QUOTA 50000       // microseconds
-#define QUOTA 500000      // half second for debugging
+#define QUOTA 5000        // debugging quota in us
 #define STACK_SIZE 32767  // bytes
 #define MAX_THREADS 128
 

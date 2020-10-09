@@ -11,3 +11,10 @@ https://linuxhint.com/sigalarm_alarm_c_language/
 https://nxmnpg.lemoda.net/3/ualarm
 https://stackoverflow.com/questions/231912/what-is-the-difference-between-sigaction-and-signal
 https://pubs.opengroup.org/onlinepubs/7908799/xsh/unistd.h.html
+https://www.linuxprogrammingblog.com/code-examples/sigaction
+
+Debugging:
+https://www.howtoforge.com/linux-dmesg-command/
+https://darkdust.net/files/GDB%20Cheat%20Sheet.pdf
+https://stackoverflow.com/questions/1444428/time-stamp-in-the-c-programming-language
+
