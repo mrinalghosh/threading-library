@@ -65,8 +65,10 @@ void scheduler(int signum) {
     if (!setjmp(current->buf)) {  // setjmp returns zero the first time it's called - only runs the one time.
         //saving context so switch back to it later
         printf("SETJMP CALLED\n");
-        current->state = READY;    // stop running current thread
-        current = current->next;   // go to next thread
+        current->state = READY;  // stop running current thread
+        do {
+            current = current->next;  // go to next thread
+        } while (current->state == EXITED);
         current->state = RUNNING;  // set state as running
         longjmp(current->buf, 1);  // longjump to next thread
     }
@@ -196,8 +198,9 @@ void pthread_exit(void *value_ptr) {
     free(current->stack);
 
     // removing from linked list - might need to free the memory from the TCB later - maybe maintain a secondary linked list of things to delete?
-    current->last->next = current->next;
-    current->next->last = current->last;
+    // current->last->next = current->next;
+    // current->next->last = current->last;
+
     --thread_c;
     // TODO: increment to next thread?
 
