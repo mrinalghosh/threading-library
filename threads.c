@@ -17,21 +17,21 @@
     if process exits - implicitly call pthread_exit? - need to go back to scheduler?
 */
 
-int thread_count = 0;
+int thread_c = 0;
 TCB *head = NULL;
-TCB *current = head;
+TCB *current = NULL;
 
 void scheduler(int signum) {
-    // schedule should be the signal handler
-    printf("inside scheduler function\n");
-
-    // set current to next thread
-    current = current->next;
-
-    // longjump to next thread
-    longjmp(current->buf, 1);
+    printf("inside scheduler - recieved SIGALRM\n");
+    if (!setjmp(current->buf)) {  // setjmp returns zero the first time it's called
+        current->state = READY;
+        current = current->next;  // set current to next thread
+        current->state = RUNNING;
+        longjmp(current->buf, 1);  // longjump to next thread
+    }
 }
 
+/*
 static void _inspect(jmp_buf buf) {
     printf(
         "RBX: 0x%08lx\nRBP: 0x%08lx\nR12: 0x%08lx\nR13: 0x%08lx\nR14: \
@@ -44,39 +44,41 @@ static void _inspect(jmp_buf buf) {
     printf("RSPd:0x%08lx\nPCd: 0x%08lx\n",
            ptr_demangle(buf[0].__jmpbuf[JB_RSP]),
            ptr_demangle(buf[0].__jmpbuf[JB_PC]));
-
-    // buf[0].__jmpbuf[JB_PC] = ptr_mangle((long unsigned int)win);
 }
+*/
 
-static void _init(void) {
+static void threads_init(void) {
+    printf("inside init - created first thread\n");
+
     // helper function called with first thread creation - initializes first thread
-    TCB *first_thread = (TCB *)calloc(1, sizeof(TCB));
+    TCB *first = (TCB *)calloc(1, sizeof(TCB));
 
     // create circular list with just single element
-    first_thread->next = first_thread;
-    first_thread->last = first_thread;
+    first->next = first;
+    first->last = first;
 
-    // set head to be first_thread
-    head = first_thread;
+    // set head to be first
+    head = first;
 
     // set current to first thread
-    curr = first_thread;
+    current = first;
 
     // initialize other tcb vars
-    first_thread->stack = NULL;   // never need to look at this pointer
-    first_thread->state = READY;  // TODO: is this RUNNING or READY
-    first_thread->id = (pthread_t)thread_count;
+    first->stack = calloc(1, STACK_SIZE);  // allocate memory for stack independently
+    first->state = READY;                  // TODO: is this RUNNING or READY
+    first->id = (pthread_t)thread_c;
 
     // save jmp_buf
-    setjmp(first_thread->buf);
+    setjmp(first->buf);
 
     // increment thread count
-    ++thread_count;
+    ++thread_c;
 
     // signal handling
     struct sigaction act;
-    act.sa_handler = signal_handler;
+    act.sa_handler = scheduler;
     if (sigaction(SIGALRM, &act, NULL) < 0) {
+        printf("SIGALARM FAILED - BREAKING\n");
         perror("sigaction");
         exit(1);
     }
@@ -91,9 +93,12 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
     attr always NULL
     */
 
-    // initialize main thread
-    if (!thread_count) {
-        _init();
+    printf("inside pthread create\n");
+
+    // TODO: case where 128 threads are created
+
+    if (!thread_c) { // initialize first thread
+        threads_init();
     } else {
         // create thread and add to end of circular linked list
         TCB *new_thread = (TCB *)calloc(1, sizeof(TCB));
@@ -101,7 +106,7 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
         new_thread->next = head;
 
         // save thread id
-        new_thread->id = (pthread_t)thread_count;
+        new_thread->id = (pthread_t)thread_c;
 
         // allocate memory to stack
         new_thread->stack = calloc(1, STACK_SIZE);  // TODO: is this 1x32767 or 32767x1? - use calloc or malloc?
@@ -110,11 +115,11 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
         setjmp(new_thread->buf);
         new_thread->state = READY;  // TODO: is this right?
 
-        // put address of pthread_exit on top of stack
-        memcpy(new_thread->stack, (long unsigned)pthread_exit, 8);
+        // TODO: put address of pthread_exit on top of stack
+        *(long unsigned *)new_thread->stack = (long unsigned)pthread_exit;
 
         // MOVE STACK POINTER DOWN BY 8 bytes - 64 bits
-        new_thread->stack = (void *)((long unsigned *)new_thread->stack++);
+        new_thread->stack = (void *)(new_thread->stack + 8);
 
         // start_thunk
         new_thread->buf[0].__jmpbuf[JB_R12] = ptr_mangle((long unsigned)start_routine);  // ->pc
@@ -122,10 +127,10 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
         start_thunk();
 
         // mangle RIP (done above) and RSP
-        new_thread->buf[0].__jmpbuf[JB_RSP] = ptr_mangle(new_thread->stack);
+        new_thread->buf[0].__jmpbuf[JB_RSP] = ptr_mangle((long unsigned)new_thread->stack);
 
         // increment thread_c
-        ++thread_count;
+        ++thread_c;
     }
 
     return 0;
@@ -135,6 +140,8 @@ void pthread_exit(void *value_ptr) {
     // ignore value of value_ptr
     // clean up all information relating to terminating thread
 
+    printf("inside pthread exit\n");
+
     // set status to exited
     current->state = EXITED;
 
@@ -142,8 +149,10 @@ void pthread_exit(void *value_ptr) {
     free(current->stack);
 
     // don't remove from linked list for now
+    // TODO: increment to next thread?
 
-    // TODO: increment to next thread?????
+    // return pthread_self();
+    __builtin_unreachable();
 }
 
 pthread_t pthread_self(void) {
