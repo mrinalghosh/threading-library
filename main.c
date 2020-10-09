@@ -24,9 +24,9 @@ int main(int argc, char **argv) {
     int i;
     unsigned long int cnt = 10000000;
 
-    printf("inside main\n");
+    printf("Inside main.c\n");
 
-    //create THRAD_CNT threads
+    //create THREAD_CNT threads
     for (i = 0; i < THREAD_CNT; i++) {
         pthread_create(&threads[i], NULL, count, (void *)((i + 1) * cnt));
     }

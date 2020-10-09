@@ -6,8 +6,8 @@
 
 // #define QUOTA 50000       // microseconds
 #define QUOTA 5000        // debugging quota in us
-#define STACK_SIZE 32767  // bytes
-#define MAX_THREADS 128
+#define STACKSIZE 32767  // bytes
+#define MAXTHREADS 128
 
 #define JB_RBX 0
 #define JB_RBP 1
