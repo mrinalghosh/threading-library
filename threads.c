@@ -53,7 +53,7 @@ void scheduler(int signum) {
     }
 }
 
-static void threads_init(void) {
+static void thread_init(void) {
     printf("inside init - created first thread\n");
 
     // helper function called with first thread creation - initializes first thread
@@ -115,7 +115,7 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
     // TODO: case where 128 threads are created
 
     if (!thread_c) {  // initialize first thread
-        threads_init();
+        thread_init();
     } else {
         // create thread and add to end of circular linked list
         TCB *new_thread = (TCB *)calloc(1, sizeof(TCB));
@@ -149,6 +149,8 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
         // increment thread_c
         ++thread_c;
     }
+
+    inspect_thread(new_thread);
 
     return 0;
 }
