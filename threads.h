@@ -4,8 +4,7 @@
 #include <pthread.h>
 #include <setjmp.h>
 
-// #define QUOTA 50000       // microseconds
-#define QUOTA 5000        // debugging quota in us
+#define QUOTA 50000      // debugging quota in microseconds
 #define STACKSIZE 32767  // bytes
 #define MAXTHREADS 128
 

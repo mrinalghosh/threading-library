@@ -124,7 +124,7 @@ static void thread_init(void) {
     ualarm(QUOTA, QUOTA);
 
     // inspect contents of tcb
-    inspect_thread(mt);
+    // inspect_thread(mt);
 }
 
 int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_routine)(void *), void *arg) {
@@ -164,23 +164,21 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
 
     // TODO: put address of pthread_exit on top of stack
     new_thread->stack = new_thread->stack + STACKSIZE - 8;  // 8 from the top - stack starts from high address
-    *(long unsigned *)new_thread->stack = (long unsigned)pthread_exit;
+    *(unsigned long *)new_thread->stack = (unsigned long)pthread_exit;
 
     // MOVE STACK POINTER DOWN BY 8 bytes - 64 bits
     // new_thread->stack = (void *)(new_thread->stack + 8);
 
-    // start_thunk
-    new_thread->buf[0].__jmpbuf[JB_R12] = (long unsigned)start_routine;
-    new_thread->buf[0].__jmpbuf[JB_R13] = (long unsigned)arg;                     // ->rdi
-    new_thread->buf[0].__jmpbuf[JB_PC] = ptr_mangle((long unsigned)start_thunk);  // ->pc
-
-    // mangle RIP/PC (done above) and RSP
-    new_thread->buf[0].__jmpbuf[JB_RSP] = ptr_mangle((long unsigned)new_thread->stack);
+    // mangle RIP/PC and RSP
+    new_thread->buf[0].__jmpbuf[JB_R12] = (unsigned long)start_routine;
+    new_thread->buf[0].__jmpbuf[JB_R13] = (unsigned long)arg;                     // ->rdi
+    new_thread->buf[0].__jmpbuf[JB_PC] = ptr_mangle((unsigned long)start_thunk);  // ->pc - from camden OH
+    new_thread->buf[0].__jmpbuf[JB_RSP] = ptr_mangle((unsigned long)new_thread->stack);
 
     // increment thread_c
     ++thread_c;
 
-    inspect_thread(new_thread);
+    // inspect_thread(new_thread);
 
     return 0;
 }
@@ -189,13 +187,14 @@ void pthread_exit(void *value_ptr) {
     // ignore value of value_ptr
     // clean up all information relating to terminating thread
 
-    printf("pthread exited\n");
+    printf("THREAD %d EXITED\n", (unsigned)current->id);
 
     // set status to exited
     current->state = EXITED;
 
     // free stack
-    free(current->stack);
+    // if (!current->stack)
+    //     free(current->stack);
 
     // removing from linked list - might need to free the memory from the TCB later - maybe maintain a secondary linked list of things to delete?
     // current->last->next = current->next;
@@ -205,6 +204,7 @@ void pthread_exit(void *value_ptr) {
     // TODO: increment to next thread?
 
     // return pthread_self();
+    scheduler(SIGALRM);
     __builtin_unreachable();  // GNU compiler built in - never return to this function if we hit this
 }
 
