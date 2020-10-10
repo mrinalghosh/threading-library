@@ -10,10 +10,10 @@
 void *count(void *arg) {
     unsigned long int c = (unsigned long int)arg;
     int i;
-    printf("inside count function in main\n");
+    // printf("Inside COUNT in MAIN\n");
     for (i = 0; i < c; i++) {
-        if ((i % 1000) == 0) {
-            // printf("tid: 0x%x Just counted to %d of %ld\n", (unsigned int)pthread_self(), i, c);
+        if ((i % 100000) == 0) {
+            printf("tid: 0x%x Just counted to %d of %ld\n", (unsigned int)pthread_self(), i, c);
         }
     }
     return arg;
@@ -24,7 +24,7 @@ int main(int argc, char **argv) {
     int i;
     unsigned long int cnt = 10000000;
 
-    printf("Inside main.c\n");
+    // printf("Inside MAIN\n");
 
     //create THREAD_CNT threads
     for (i = 0; i < THREAD_CNT; i++) {

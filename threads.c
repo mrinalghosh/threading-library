@@ -6,69 +6,51 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>    // memset
-#include <sys/time.h>  // for debugging ualarm
-#include <time.h>
+#include <string.h>  // memset
 #include <unistd.h>  // ualarm
 
 #include "ec440threads.h"
 
-/*TODO:
-    helper function - initialize thread subsys after thread pthread_create()
-    decide how to enumerate thread ids - 0 to n or something else?
-
-    if process exits - implicitly call pthread_exit? - need to go back to scheduler?
-*/
-
-int thread_c = 0;
+int tcount = 0;
 TCB *head = NULL;
 TCB *current = NULL;
+// TCB *mess = NULL;
 
-// time_t now;
-// struct timeval tv;
-// struct tm *local;
+// void inspect_jmpbuf(jmp_buf buf) {
+//     printf(
+//         "RBX: 0x%08lx\nRBP: 0x%08lx\nR12: 0x%08lx\nR13: 0x%08lx\nR14: 0x%08lx\nR15: 0x%08lx\nSP:  0x%08lx\nPC:  0x%08lx\n",
+//         buf[0].__jmpbuf[JB_RBX], buf[0].__jmpbuf[JB_RBP],
+//         buf[0].__jmpbuf[JB_R12], buf[0].__jmpbuf[JB_R13],
+//         buf[0].__jmpbuf[JB_R14], buf[0].__jmpbuf[JB_R15],
+//         buf[0].__jmpbuf[JB_RSP], buf[0].__jmpbuf[JB_PC]);
 
-// static void tprint(const char *message) {
-//     gettimeofday(&tv, NULL);
-//     time(&now);
-//     local = localtime(&now);
-//     printf("%02d:%02d:%06ld :: %s\n", local->tm_min, local->tm_sec, tv.tv_usec, message);
-//     fflush(stdout);
+//     printf("RSPd:0x%08lx\nPCd: 0x%08lx\n",
+//            ptr_demangle(buf[0].__jmpbuf[JB_RSP]),
+//            ptr_demangle(buf[0].__jmpbuf[JB_PC]));
 // }
 
-void inspect_jmpbuf(jmp_buf buf) {
-    printf(
-        "RBX: 0x%08lx\nRBP: 0x%08lx\nR12: 0x%08lx\nR13: 0x%08lx\nR14: 0x%08lx\nR15: 0x%08lx\nSP:  0x%08lx\nPC:  0x%08lx\n",
-        buf[0].__jmpbuf[JB_RBX], buf[0].__jmpbuf[JB_RBP],
-        buf[0].__jmpbuf[JB_R12], buf[0].__jmpbuf[JB_R13],
-        buf[0].__jmpbuf[JB_R14], buf[0].__jmpbuf[JB_R15],
-        buf[0].__jmpbuf[JB_RSP], buf[0].__jmpbuf[JB_PC]);
-
-    printf("RSPd:0x%08lx\nPCd: 0x%08lx\n",
-           ptr_demangle(buf[0].__jmpbuf[JB_RSP]),
-           ptr_demangle(buf[0].__jmpbuf[JB_PC]));
-}
-
-void inspect_thread(TCB *thread) {
-    printf("-------8<-------------[ cut here ]-------------\n");
-    // printf("Thread Control Block:\nid:%08x\n", thread->id);
-    inspect_jmpbuf(thread->buf);
-    printf("stack:%p\nstate:%d\n", thread->stack, thread->state);
-    printf("next:%p\nlast:%p\n", thread->next, thread->last);
-}
+// void inspect_thread(TCB *thread) {
+//     inspect_jmpbuf(thread->buf);
+//     printf("stack:%p\nstate:%d\n", thread->stack, thread->state);
+//     printf("next:%p\nlast:%p\n", thread->next, thread->last);
+// }
 
 void scheduler(int signum) {
-    // tprint("scheduler recieved SIGALRM\n");
+    // printf("-------8<-------------[ cut here ]-------------\n");
+    // printf("Scheduling: thread %d ===> thread %d\n", (unsigned)current->id, (unsigned)current->next->id);
+    // inspect_thread(current);
 
-    printf("Scheduling: thread %d ===> thread %d\n", (unsigned)current->id, (unsigned)current->next->id);
-    inspect_thread(current);
     if (!setjmp(current->buf)) {  // setjmp returns zero the first time it's called - only runs the one time.
-        //saving context so switch back to it later
-        printf("SETJMP CALLED\n");
-        current->state = READY;  // stop running current thread
-        do {
-            current = current->next;  // go to next thread
-        } while (current->state == EXITED);
+        current->state = READY;   // stop running current thread
+
+        // IMPLEMENTATION WITH KEEPING EXITED THREADS IN LINKED LIST
+        // do {
+        //     current = current->next;  // go to next thread
+        //     printf("GOING TO THREAD %d with STATE:%d\n", (unsigned)current->id, current->state);
+        // } while (current->state == EXITED);
+        // raise(SIGSEGV);
+
+        current = current->next;
         current->state = RUNNING;  // set state as running
         longjmp(current->buf, 1);  // longjump to next thread
     }
@@ -84,23 +66,20 @@ static void thread_init(void) {
     mt->next = mt;
     mt->last = mt;
 
-    // set head to be mt
+    // set head and current to be mt
     head = mt;
-
-    // set current to mt thread
     current = mt;
 
     // initialize other tcb vars
-    // mt->stack = calloc(1, STACKSIZE);  // allocate memory for stack independently
-    mt->stack = NULL;     // main doesn't have an explicit stack
+    mt->stack = NULL;     // main has its own stack
     mt->state = RUNNING;  // TODO: is this RUNNING or READY
-    mt->id = (pthread_t)thread_c;
+    mt->id = (pthread_t)tcount;
 
     // save jmp_buf
     setjmp(mt->buf);
 
     // increment thread count
-    ++thread_c;
+    ++tcount;
 
     // signal handling
     struct sigaction act;
@@ -128,15 +107,13 @@ static void thread_init(void) {
 }
 
 int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_routine)(void *), void *arg) {
-    // attr always NULL
+    // printf("Inside pthread_create()\nThread count: %d\n", tcount);
 
-    // printf("Inside pthread_create()\nThread count: %d\n", thread_c);
-
-    if (thread_c == 0) {  // initialize single main thread
+    if (tcount == 0) {  // initialize single main thread
         thread_init();
     }
 
-    if (thread_c >= MAXTHREADS) {
+    if (tcount >= MAXTHREADS) {
         printf("Maximum (128) threads allocated, exiting with code 1!\n");
         exit(1);
     }
@@ -151,10 +128,10 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
     new_thread->next = head;
 
     // save thread id
-    new_thread->id = (pthread_t)thread_c;
+    new_thread->id = (pthread_t)tcount;
 
     // allocate memory to stack
-    new_thread->stack = calloc(STACKSIZE, 1);  // TODO: is this 1x32767 or 32767x1? - use calloc to prevent having to zero
+    new_thread->stack = calloc(1, STACKSIZE);  // TODO: is this 1x32767 or 32767x1? - use calloc to prevent having to zero
 
     // populate tcb
     setjmp(new_thread->buf);
@@ -175,8 +152,8 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
     new_thread->buf[0].__jmpbuf[JB_PC] = ptr_mangle((unsigned long)start_thunk);  // ->pc - from camden OH
     new_thread->buf[0].__jmpbuf[JB_RSP] = ptr_mangle((unsigned long)new_thread->stack);
 
-    // increment thread_c
-    ++thread_c;
+    // increment tcount
+    ++tcount;
 
     // inspect_thread(new_thread);
 
@@ -187,24 +164,29 @@ void pthread_exit(void *value_ptr) {
     // ignore value of value_ptr
     // clean up all information relating to terminating thread
 
-    printf("THREAD %d EXITED\n", (unsigned)current->id);
-
     // set status to exited
     current->state = EXITED;
+
+    // printf("THREAD %d EXITED ---- STATE WAS SET TO %d\n", (unsigned)current->id, current->state);
 
     // free stack
     // if (!current->stack)
     //     free(current->stack);
 
     // removing from linked list - might need to free the memory from the TCB later - maybe maintain a secondary linked list of things to delete?
-    // current->last->next = current->next;
-    // current->next->last = current->last;
+    current->last->next = current->next;
+    current->next->last = current->last;
 
-    --thread_c;
-    // TODO: increment to next thread?
+    // TODO: create new linked list to clean up when main thread exits
+    // TCB *temp = mess;  // linked list LINE - only using next - first time mess is just null
+    // while (!temp) { // find last position of mess
+    //     temp = temp->next;
+    // }
+
+    --tcount;
 
     // return pthread_self();
-    scheduler(SIGALRM);
+    scheduler(SIGALRM); // return to scheduler early
     __builtin_unreachable();  // GNU compiler built in - never return to this function if we hit this
 }
 
