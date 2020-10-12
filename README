@@ -1,4 +1,25 @@
-SOURCES:
+EC440: Introduction to Operating Systems
+Professor Manuel Egele
+Mrinal Ghosh (ghoshm@bu.edu)
+
+[Description]
+
+[Issues]
+
+- When a thread finishes execution and is in pthread_exit, I invoke the signal handler immediately, which switches it to the next thread. This results in the thread after an exit being run for the remainder of a quota till SIGALRM is naturally called. This is undefined according to the specifications, but harmless as the number of exits are limited and the expected lost time should be equitably distributed.
+
+[Sources]
+
+Office Hours, Lectures, Piazza, Peer Discussions
+
+DLLs:
+https://www.geeksforgeeks.org/doubly-linked-list/
+https://www.linuxquestions.org/questions/programming-9/c-how-do-you-malloc-for-a-void-pointer-796747/
+http://www.cs.toronto.edu/~heap/270F02/node31.html
+
+pthreads:
+https://www.geeksforgeeks.org/pthread_self-c-example/
+https://stackoverflow.com/questions/27210568/managing-a-linked-list-with-pthreads
 
 Preemptive:
 https://accu.org/journals/overload/23/130/schmidt_2185/ - unix sleep functions
@@ -12,6 +33,7 @@ https://nxmnpg.lemoda.net/3/ualarm
 https://stackoverflow.com/questions/231912/what-is-the-difference-between-sigaction-and-signal
 https://pubs.opengroup.org/onlinepubs/7908799/xsh/unistd.h.html
 https://www.linuxprogrammingblog.com/code-examples/sigaction - memset
+https://stackoverflow.com/questions/2418812/catching-signal-inside-its-own-handler
 
 Debugging:
 https://www.howtoforge.com/linux-dmesg-command/
@@ -20,5 +42,8 @@ https://stackoverflow.com/questions/1444428/time-stamp-in-the-c-programming-lang
 https://stackoverflow.com/questions/1759794/how-to-print-pthread-t
 https://stackoverflow.com/questions/5276988/how-to-set-break-point-on-one-file-of-a-project-which-has-many-files-with-same-n
 https://stackoverflow.com/questions/38847673/segmentation-fault-at-the-end-of-the-program-in-c - valgrind would help!
+https://stackoverflow.com/questions/18986351/what-is-the-simplest-standard-conform-way-to-produce-a-segfault-in-c - forcing a segfault to analyze stack
+https://www.tecmint.com/count-word-occurrences-in-linux-text-file/
 
-
+Better practices:
+https://towardsdatascience.com/data-scientists-your-variable-names-are-awful-heres-how-to-fix-them-89053d2855be

@@ -11,10 +11,9 @@
 
 #include "ec440threads.h"
 
-int tcount = 0;
+int thread_count = 0;
 TCB *head = NULL;
 TCB *current = NULL;
-// TCB *mess = NULL;
 
 // void inspect_jmpbuf(jmp_buf buf) {
 //     printf(
@@ -32,7 +31,7 @@ TCB *current = NULL;
 // void inspect_thread(TCB *thread) {
 //     inspect_jmpbuf(thread->buf);
 //     printf("stack:%p\nstate:%d\n", thread->stack, thread->state);
-//     printf("next:%p\nlast:%p\n", thread->next, thread->last);
+//     printf("next:%p\nlast:%p\n", thread->next, thread->prev);
 // }
 
 void scheduler(int signum) {
@@ -40,81 +39,67 @@ void scheduler(int signum) {
     // printf("Scheduling: thread %d ===> thread %d\n", (unsigned)current->id, (unsigned)current->next->id);
     // inspect_thread(current);
 
-    if (!setjmp(current->buf)) {  // setjmp returns zero the first time it's called - only runs the one time.
-        current->state = READY;   // stop running current thread
+    if (!setjmp(current->buf)) {  // save current buffer
+        // current->state = READY;   // stop running current thread
 
         // IMPLEMENTATION WITH KEEPING EXITED THREADS IN LINKED LIST
-        // do {
-        //     current = current->next;  // go to next thread
-        //     printf("GOING TO THREAD %d with STATE:%d\n", (unsigned)current->id, current->state);
-        // } while (current->state == EXITED);
-        // raise(SIGSEGV);
+        do {
+            if (current->state == RUNNING)
+                current->state = READY;
+            current = current->next;  // go to next thread
+            // printf("GOING TO THREAD %d with STATE:%d\n", (unsigned)current->id, current->state);
+        } while (current->state == EXITED);
 
-        current = current->next;
+        // current = current->next;   // at this point we have lost track of the current thread - WITHOUT explicitly freeing it :(
         current->state = RUNNING;  // set state as running
-        longjmp(current->buf, 1);  // longjump to next thread
+        longjmp(current->buf, 1);  // longjmp to next thread
     }
 }
 
 static void thread_init(void) {
-    // printf("Inside init - created main thread\n");
-
-    // helper function called with first thread creation - initializes main thread
     TCB *mt = (TCB *)calloc(1, sizeof(TCB));
 
-    // create circular list with just single element
-    mt->next = mt;
-    mt->last = mt;
-
-    // set head and current to be mt
+    // set head and current to be main thread
     head = mt;
     current = mt;
 
-    // initialize other tcb vars
-    mt->stack = NULL;     // main has its own stack
-    mt->state = RUNNING;  // TODO: is this RUNNING or READY
-    mt->id = (pthread_t)tcount;
+    // initialize TCB
+    mt->next = mt;
+    mt->prev = mt;     // circular list with single element
+    mt->stack = NULL;  // main has a REAL stack
+    mt->state = RUNNING;
+    mt->id = (pthread_t)thread_count;
 
-    // save jmp_buf
     setjmp(mt->buf);
 
-    // increment thread count
-    ++tcount;
+    ++thread_count;
 
     // signal handling
     struct sigaction act;
-
-    // zero struct
-    memset(&act, '\0', sizeof(act));
+    memset(&act, '\0', sizeof(act));  // zero struct
 
     act.sa_handler = scheduler;
     act.sa_flags = SA_NODEFER;  // can even recieve alarm signal within handler
 
-    // if (sigaction(SIGALRM, &act, NULL) < 0) { // this hasn't failed
-    //     printf("SIGALARM FAILED - BREAKING\n");
-    //     perror("sigaction");
-    //     exit(1);
-    // }
+    if (sigaction(SIGALRM, &act, NULL) < 0) {  // this hasn't failed yet
+        perror("SIGACTION");
+        exit(1);
+    }
 
-    // doesn't fail - only run once
-    sigaction(SIGALRM, &act, NULL);
-
-    // set repeating alarm for quota micro seconds
     ualarm(QUOTA, QUOTA);
 
-    // inspect contents of tcb
     // inspect_thread(mt);
 }
 
 int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_routine)(void *), void *arg) {
-    // printf("Inside pthread_create()\nThread count: %d\n", tcount);
+    // printf("Inside pthread_create()\nThread count: %d\n", thread_count);
 
-    if (tcount == 0) {  // initialize single main thread
+    if (thread_count == 0) {  // initialize single main thread
         thread_init();
     }
 
-    if (tcount >= MAXTHREADS) {
-        printf("Maximum (128) threads allocated, exiting with code 1!\n");
+    if (thread_count >= MAXTHREADS) {
+        perror("maximum threads created!");
         exit(1);
     }
 
@@ -122,29 +107,24 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
     TCB *new_thread = (TCB *)calloc(1, sizeof(TCB));
 
     // add to end of circular linked list
-    new_thread->last = head->last;
-    head->last->next = new_thread;
-    head->last = new_thread;
+    new_thread->prev = head->prev;
+    head->prev->next = new_thread;
+    head->prev = new_thread;
     new_thread->next = head;
 
     // save thread id
-    new_thread->id = (pthread_t)tcount;
+    new_thread->id = (pthread_t)thread_count;
+    *thread = new_thread->id;
 
     // allocate memory to stack
-    new_thread->stack = calloc(1, STACKSIZE);  // TODO: is this 1x32767 or 32767x1? - use calloc to prevent having to zero
+    new_thread->stack = calloc(1, STACKSIZE);
 
     // populate tcb
     setjmp(new_thread->buf);
-    new_thread->state = READY;  // TODO: is this right?
+    new_thread->state = READY;
 
-    //TODO: what to do with the 'thread' arg above?
-
-    // TODO: put address of pthread_exit on top of stack
-    new_thread->stack = new_thread->stack + STACKSIZE - 8;  // 8 from the top - stack starts from high address
+    new_thread->stack = new_thread->stack + STACKSIZE - 8;  // 8 from the top - stack starts from high address - camden OH
     *(unsigned long *)new_thread->stack = (unsigned long)pthread_exit;
-
-    // MOVE STACK POINTER DOWN BY 8 bytes - 64 bits
-    // new_thread->stack = (void *)(new_thread->stack + 8);
 
     // mangle RIP/PC and RSP
     new_thread->buf[0].__jmpbuf[JB_R12] = (unsigned long)start_routine;
@@ -152,41 +132,26 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr, void *(*start_
     new_thread->buf[0].__jmpbuf[JB_PC] = ptr_mangle((unsigned long)start_thunk);  // ->pc - from camden OH
     new_thread->buf[0].__jmpbuf[JB_RSP] = ptr_mangle((unsigned long)new_thread->stack);
 
-    // increment tcount
-    ++tcount;
-
-    // inspect_thread(new_thread);
+    ++thread_count;
 
     return 0;
 }
 
 void pthread_exit(void *value_ptr) {
-    // ignore value of value_ptr
-    // clean up all information relating to terminating thread
-
-    // set status to exited
     current->state = EXITED;
 
-    // printf("THREAD %d EXITED ---- STATE WAS SET TO %d\n", (unsigned)current->id, current->state);
+    // pop from circ linked list
+    // current->prev->next = current->next;
+    // current->next->prev = current->prev;
 
-    // free stack
-    // if (!current->stack)
-    //     free(current->stack);
+    // TODO: clean up by freeing exited threads - maybe maintain a secondary linked list of things to delete when thread count hits 1? main ends?
+    // free(current->stack); // "free(): invalid pointer"
 
-    // removing from linked list - might need to free the memory from the TCB later - maybe maintain a secondary linked list of things to delete?
-    current->last->next = current->next;
-    current->next->last = current->last;
+    --thread_count;  // since tid is only unique to threads which have not exited - can reuse
 
-    // TODO: create new linked list to clean up when main thread exits
-    // TCB *temp = mess;  // linked list LINE - only using next - first time mess is just null
-    // while (!temp) { // find last position of mess
-    //     temp = temp->next;
-    // }
+    // exit(0) once prev thread has exited - IF IT DOESN'T PERROR or SEGFAULT earlier, the exit code is zero automatically
 
-    --tcount;
-
-    // return pthread_self();
-    scheduler(SIGALRM); // return to scheduler early
+    scheduler(SIGALRM);       // return to scheduler early
     __builtin_unreachable();  // GNU compiler built in - never return to this function if we hit this
 }
 

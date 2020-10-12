@@ -1,18 +1,16 @@
 #include <stdio.h>
-// #include<pthread.h>
 #include <stdlib.h>
 
 #include "threads.h"
 
-#define THREAD_CNT 3
+#define THREAD_CNT 4
 
 // waste some time
 void *count(void *arg) {
     unsigned long int c = (unsigned long int)arg;
     int i;
-    // printf("Inside COUNT in MAIN\n");
     for (i = 0; i < c; i++) {
-        if ((i % 100000) == 0) {
+        if ((i % 1000000) == 0) {
             printf("tid: 0x%x Just counted to %d of %ld\n", (unsigned int)pthread_self(), i, c);
         }
     }
@@ -23,8 +21,6 @@ int main(int argc, char **argv) {
     pthread_t threads[THREAD_CNT];
     int i;
     unsigned long int cnt = 10000000;
-
-    // printf("Inside MAIN\n");
 
     //create THREAD_CNT threads
     for (i = 0; i < THREAD_CNT; i++) {
