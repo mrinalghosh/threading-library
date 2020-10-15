@@ -22,7 +22,7 @@ void scheduler(int signum) {
         } while (current->state == EXITED);
 
         current->state = RUNNING;  // mark next thread - running
-        longjmp(current->buf, 1);  // longjmp to next thread
+        longjmp(current->buf, 1);  // longjmp to next thread buffer
     }
 }
 
@@ -34,7 +34,6 @@ static void thread_init(void) {
     mt->next = mt;
     mt->prev = mt;  // circular singleton
 
-    mt->stack = NULL;  // main has a REAL stack
     mt->state = RUNNING;
     mt->id = (pthread_t)thread_count;
 

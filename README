@@ -3,10 +3,57 @@ Professor Manuel Egele
 Mrinal Ghosh (ghoshm@bu.edu)
 
 [Description]
+For this project, I implemented a preemptive user-space threading library following the POSIX standard threads API (pthread.h).
+During the first call to the function pthread_create(), we need to initialize the main thread as well as some utilities to manage the threading library:
+
+- the main thread's thread control buffer (TCB) containing the thread id, status, register buffer array, and pointers to other TCBs is dynamically allocated
+- the main thread points to itself as a previous and next thread, in order to start the circular linked list structure.
+- no pseudo-stack needs to be allocated since main has its own
+- state is set to RUNNING
+- the buffers are stored using setjmp
+- a sigaction is zeroed and registered to seek SIGALRM and map that to a custom Round Robin Scheduler
+- ualarm is begun with a periodic quota time of 50 ms / 50000 us, after each interval, a SIGALRM is raised
+
+If the number of active threads is lower higher than the maximum of 128 threads, we perror and exit.
+
+After initialization, on each successive call to pthread_create() we do the following:
+
+- dynamically allocate space for the TCB (zeroing done using calloc)
+- insert the new thread behind head in the circular linked list
+- thread id is set to the next available thread count number
+- set the thread state to READY
+- dynamically allocate a stack of size 32767 bytes (calloc-ed)
+- setjmp in order to store the current context of the thread - however the stack and instruction pointers are currently not correct
+- we move to the very top of the stack (since it grows downwards) and as the final return address, place a pointer to pthread_exit, so that its implicitly called when the thread finishes execution.
+- our new bottom of stack address is mangled and placed into RSP in the jmpbuf.
+- start_routine is put into R12 (in jmpbuf), and the single args pointer is put into R13. RIP (jmpbuf) is set to a mangled version of start_thunk (provided in ec440threads.h)
+- start_thunk will copy over start_routine to RIP, and args into RDI, and runs from that point in the thread is when running
+- thread count increments
+
+The function pthread_exit is implicitly called by every thread other than the main thread (which returns 0 and exits the process) after the threads run to completion:
+
+- sets the current thread's state to exited
+- decrements active thread count so that a new thread may be allocated with a thread id that is unique among non-exited threads.
+- calls the scheduler with the argument SIGALRM (though any signal would work in this implementation)
+- uses __builtin_unreachable() to indicate that we will not be returning to this function from the scheduler
+
+pthread_self returns the thread id for the current thread.
+
+Scheduler:
+- stores current thread's buffer
+- if current thread status is RUNNING (not EXITED), sets status to READY and checks for next READY thread
+- loop until non-EXITED thread is found
+- jumps to new thread context and sets status to RUNNING
+
+[Testing]
+- I devised several iterations based around the sample program provided. This included checking for too many threads, initializations and exits. I also used a very verbose debug output and GDB to find the source of errors and non-programmed behaviour
 
 [Issues]
 
-- When a thread finishes execution and is in pthread_exit, I invoke the signal handler immediately, which switches it to the next thread. This results in the thread after an exit being run for the remainder of a quota till SIGALRM is naturally called. This is undefined according to the specifications, but harmless as the number of exits are limited and the expected lost time should be equitably distributed.
+- When a thread finishes execution and is in pthread_exit, I invoke the signal handler immediately, which switches it to the next thread. 
+This results in the thread after an exit being run for the remainder of a quota till SIGALRM is naturally called. This is undefined according to the specifications, but harmless as the number of exits are limited and the expected lost time should be equitably distributed.
+- Despite my best efforts, I was not able to free the allocations of memory for the TCB or stack explicitly in pthread_exit. While modern OS's should automatically dellocate the memory on termination, I hope to resolve the issue with freeing memory, hopefully with the help of utilities such as Valgrind and ASAN.
+- The numbering may not be the best and allocates the id=thread_count, which may make certain thread ids non-unique after certain exit orders.
 
 [Sources]
 
